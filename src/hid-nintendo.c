@@ -1802,6 +1802,7 @@ static int joycon_input_create(struct joycon_ctlr *ctlr)
 	__set_bit(MSC_TIMESTAMP, ctlr->imu_input->mscbit);
 	__set_bit(INPUT_PROP_ACCELEROMETER, ctlr->imu_input->propbit);
 
+	return 0; //disable IMU for the moment to avoid to display 2 controllers in list of controllers
 	ret = input_register_device(ctlr->imu_input);
 	if (ret)
 		return ret;
