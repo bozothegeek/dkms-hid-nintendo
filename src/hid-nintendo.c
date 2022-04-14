@@ -329,12 +329,12 @@ static const u32 JC_BTN_A	= BIT(3);
 static const u32 JC_BTN_SR_R	= BIT(4);
 static const u32 JC_BTN_SL_R	= BIT(5);
 static const u32 JC_BTN_R	= BIT(6);
-static const u32 JC_BTN_ZR	= BIT(7);
+static const u32 JC_BTN_ZR	= BIT(7); // It's also Switch Online Sega Genesis/Megadrive "Mode" button
 static const u32 JC_BTN_MINUS	= BIT(8);
 static const u32 JC_BTN_PLUS	= BIT(9);
 static const u32 JC_BTN_RSTICK	= BIT(10);
-static const u32 JC_BTN_LSTICK	= BIT(11);
-static const u32 JC_BTN_HOME	= BIT(12);
+static const u32 JC_BTN_LSTICK	= BIT(11); 
+static const u32 JC_BTN_HOME	= BIT(12); 
 static const u32 JC_BTN_CAP	= BIT(13); /* capture button */
 static const u32 JC_BTN_DOWN	= BIT(16);
 static const u32 JC_BTN_UP	= BIT(17);
@@ -491,13 +491,15 @@ struct joycon_ctlr {
 #define jc_type_has_left(ctlr) \
 	(ctlr->ctlr_type == JOYCON_CTLR_TYPE_JCL || \
 	 ctlr->ctlr_type == JOYCON_CTLR_TYPE_PRO) || \
-	 jc_type_is_n64con(ctlr)
+	 jc_type_is_n64con(ctlr) || \
+	 jc_type_is_segagencon(ctlr)
 
 /* Does this controller have inputs associated with right joycon? */
 #define jc_type_has_right(ctlr) \
 	(ctlr->ctlr_type == JOYCON_CTLR_TYPE_JCR || \
 	 ctlr->ctlr_type == JOYCON_CTLR_TYPE_PRO) || \
-	 jc_type_is_n64con(ctlr)
+	 jc_type_is_n64con(ctlr) || \
+	 jc_type_is_segagencon(ctlr)
 
 /* Can this controller be connected via USB */
 #define jc_has_usb(ctlr) \
@@ -1247,7 +1249,8 @@ static void joycon_parse_report(struct joycon_ctlr *ctlr,
 
 	/* Parse the buttons and sticks */
 	btns = hid_field_extract(ctlr->hdev, rep->button_status, 0, 24);
-
+	//To comment/uncomment for debug purpose
+	//hid_warn(ctlr->hdev,"btns=%u button_status=%u\n", btns, rep->button_status);
 	if (jc_type_has_left(ctlr)) {
 		u16 raw_x;
 		u16 raw_y;
@@ -1356,18 +1359,43 @@ static void joycon_parse_report(struct joycon_ctlr *ctlr,
 		input_report_abs(dev, ABS_HAT0Y, y);
 
 		/* report buttons */
+		//A Button
 		input_report_key(dev, BTN_EAST, btns & JC_BTN_A);
+		//B Button
 		input_report_key(dev, BTN_SOUTH, btns & JC_BTN_B);
-		input_report_key(dev, BTN_TL, btns & JC_BTN_L);
-		input_report_key(dev, BTN_TR, btns & JC_BTN_R);
-		input_report_key(dev, BTN_SELECT, btns & JC_BTN_MINUS);
+		//Start Button
 		input_report_key(dev, BTN_START, btns & JC_BTN_PLUS);
-
-		if (jc_type_is_snescon(ctlr)) {
-			input_report_key(dev, BTN_TL2, btns & JC_BTN_ZL);
-			input_report_key(dev, BTN_TR2, btns & JC_BTN_ZR);
-			input_report_key(dev, BTN_NORTH, btns & JC_BTN_X);
+		
+		//For all finally due to problem of usb device id common to 3 devices (snes, sega gen/md 3 buttons and 6 buttons) :-(
+		//L  button or Z (sega gen/md 6b) button
+		input_report_key(dev, BTN_TL, btns & JC_BTN_L);
+		//R  button or C (sega gen/md 6b) button
+		input_report_key(dev, BTN_TR, btns & JC_BTN_R);
+		
+		if (jc_type_is_nescon(ctlr) || jc_type_is_snescon(ctlr) || jc_type_is_n64con(ctlr)) {
+			//Select button (nes/snes) or C-Right (n64) button
+			input_report_key(dev, BTN_SELECT, btns & JC_BTN_MINUS);
+		}
+		//For lot of buttons, need to consider snes one as Sega Gen/MD due to common USB_DEVICE_ID in bluetooth :-(
+		if (jc_type_is_segagencon(ctlr) || jc_type_is_snescon(ctlr) || jc_type_is_n64con(ctlr)) {
+			//'Capture' (n64 & sega gen/md or fake snes) button
+			input_report_key(dev, BTN_Z, btns & JC_BTN_CAP);
+			//'Home' (n64 & sega gen/md or fake snes) button
+			input_report_key(dev, BTN_MODE, btns & JC_BTN_HOME);
+			//Y button (snes) or C-Up (n64) or C (sega gen/md 3b) or Y (sega gen/md 6b) button
 			input_report_key(dev, BTN_WEST, btns & JC_BTN_Y);
+			//ZR (snes) or C-Down (n64) or 'Mode' (sega gen/md) button
+			input_report_key(dev, BTN_TR2, btns & JC_BTN_ZR);
+			//X button (snes) or C-Left (n64) or X (sega gen/md 6b) button
+			input_report_key(dev, BTN_NORTH, btns & JC_BTN_X);
+		}
+		if (jc_type_is_snescon(ctlr) || jc_type_is_n64con(ctlr)) {
+			//ZL (snes) or Z (n64) button
+			input_report_key(dev, BTN_TL2, btns & JC_BTN_ZL);
+		}
+		if(jc_type_is_n64con(ctlr)){
+			//ZR button
+			input_report_key(dev, BTN_THUMBL, btns & JC_BTN_LSTICK);
 		}
 	}
 
@@ -1579,19 +1607,19 @@ static const unsigned int nescon_button_inputs[] = {
 };
 
 static const unsigned int n64_button_inputs[] = {
-	BTN_START, BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR, BTN_TR2,
+	BTN_SELECT, BTN_START, BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TL2, BTN_TR, BTN_TR2, BTN_THUMBL, BTN_Z, BTN_MODE,
 	0 /* 0 signals end of array */
 };
 
 static const unsigned int snescon_button_inputs[] = {
 	BTN_SELECT, BTN_START, BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST,
-	BTN_TL, BTN_TL2, BTN_TR, BTN_TR2,
-	0 /* 0 signals end of array */
+	BTN_TL, BTN_TL2, BTN_TR, BTN_TR2, BTN_Z, BTN_MODE, 
+	0 /* 0 signals end of array */ //add BTN_Z, BTN_MODE to be compatible with Sega Gen/MD
 };
 
 static const unsigned int segagencon_button_inputs[] = {
-	BTN_START, BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_WEST, BTN_TL, BTN_TR, BTN_TL2, BTN_TR, BTN_TR2,
-	NULL
+	BTN_START, BTN_WEST, BTN_SOUTH, BTN_EAST, BTN_NORTH, BTN_TR2, BTN_Z, BTN_MODE, BTN_TL, BTN_TR,
+	0 /* 0 signals end of array */ //add BTN_TL, BTN_NORTH, BTN_TR to be compatible with Sega Gen/MD 6 buttons
 };
 
 static int joycon_input_create(struct joycon_ctlr *ctlr)
